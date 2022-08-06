@@ -1,0 +1,8 @@
+#exclude conda environment
+envs/
+#exclude training runs data
+runs/
+#exclude os directory files
+.DS_Store
+#exclude local setup notes
+local_notes.txt
