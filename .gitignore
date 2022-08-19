@@ -2,7 +2,9 @@
 envs/
 #exclude training data
 data/training/
+#exclude tensorboard and other instrumentation files
 runs/
+wandb/
 #exclude os directory files
 .DS_Store
 #exclude local only work
@@ -10,6 +12,7 @@ local/
 local_notes.txt
 #exclude IDE files
 .vscode/
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
