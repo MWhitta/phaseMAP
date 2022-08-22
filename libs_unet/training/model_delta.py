@@ -1,14 +1,13 @@
 import torch
 
-def state_diff(new_dict, old_dict, type = 'model', verbose=False):
+def state_diff(new_dict, old_dict, type = 'model'):
 
     """ Function to evaluate changes to tunable model parameters during training.
         Arguments:
             new_dict: current state dictionary
             old_dict: prior state dictionary
             type = 'model'|'optimizer'
-            verbose = True gives maximum new/old tensor detail in addition to summary
-            nodes = [], optional string list of specific nodes to report on
+            
         Returns:
             model: dict with same key structure as inputs, with summary and detail tensors
                 summary for each key: size(3,3) 

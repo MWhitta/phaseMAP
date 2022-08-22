@@ -2,9 +2,7 @@ import torch
 from libs_unet.training.model_delta import state_diff
 
 
-def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, debug=False, nodes=[]):
-    # number of batches
-    size = len(dataloader.dataset)
+def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch):
     #capture starting state of model for difference reporting
     init_dict = model.state_dict()
 
@@ -22,19 +20,27 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, debug=False
         if batch % 10 == 0:
             loss, current = loss.item(), epoch * batch * len(X)
             writer.add_scalar("Loss/train", loss, current)
-            #print(f"loss: {loss:.7E}  [{current:>5d}/{size:>5d}]")
-            if debug == True:
-                update_dict = state_diff(model.state_dict(), init_dict)
-                #print(update_dict)
-                if len(nodes) == 0:
-                    for key,value in update_dict.items():
-                        print(f"{key}:\n{value}")
-                else:
-                    for key,value in update_dict.items():
-                        if key in nodes:
-                            print(f"{key}:\n{value}")
-                            
-                init_dict = model.state_dict()
+            #returns a dictionary node:tensor (3x3) new/old/diff with meanabsval, range, var
+            update_dict = state_diff(model.state_dict(), init_dict)
+            #create dict for TensorBoard https://pytorch.org/docs/stable/tensorboard.html
+            #create graph for each node with new and delta data (old just lags new by one)
+            #rely on filtering in TB with node name if needed (has regex)
+            #the "x" variable for all the "y" tags will be epoch*batch*len
+            #may make sense to just make state_diff return this format directly
+            
+            for key in update_dict.keys():
+                node_dict = {}
+                node_dict['new_mav'] = update_dict[key][0][0]
+                node_dict['new_rng'] = update_dict[key][0][1]
+                node_dict['new_var'] = update_dict[key][0][2]
+                node_dict['diff_mav'] = update_dict[key][2][0]
+                node_dict['diff_rng'] = update_dict[key][2][1]
+                node_dict['diff_var'] = update_dict[key][2][2]
+                #write the node statistics to TB
+                writer.add_scalars(key, node_dict, epoch * batch * len(X))
+            
+            #store model dictionary state to compare against with next check            
+            init_dict = model.state_dict()
 
 
 def test_loop(dataloader, model, loss_fn, writer, epoch):
