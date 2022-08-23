@@ -1,10 +1,11 @@
 import torch
 from libs_unet.training.model_delta import state_diff
+from copy import deepcopy
 
 
 def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch):
     #capture starting state of model for difference reporting
-    init_dict = model.state_dict()
+    init_dict = deepcopy(model.state_dict())
 
     model.train()
     for batch, (X, y) in enumerate(dataloader):
@@ -33,6 +34,9 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch):
                 node_dict['new_mav'] = update_dict[key][0][0]
                 node_dict['new_rng'] = update_dict[key][0][1]
                 node_dict['new_var'] = update_dict[key][0][2]
+                node_dict['old_mav'] = update_dict[key][1][0]
+                node_dict['old_rng'] = update_dict[key][1][1]
+                node_dict['old_var'] = update_dict[key][1][2]
                 node_dict['diff_mav'] = update_dict[key][2][0]
                 node_dict['diff_rng'] = update_dict[key][2][1]
                 node_dict['diff_var'] = update_dict[key][2][2]
@@ -40,7 +44,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch):
                 writer.add_scalars(key, node_dict, epoch * batch * len(X))
             
             #store model dictionary state to compare against with next check            
-            init_dict = model.state_dict()
+            init_dict = deepcopy(model.state_dict())
 
 
 def test_loop(dataloader, model, loss_fn, writer, epoch):
