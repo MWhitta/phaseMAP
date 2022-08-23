@@ -18,7 +18,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch):
         loss.backward()
         optimizer.step() #leverages tensor gradients from backward()
 
-        if batch % 10 == 0:
+        if batch % 10 == 0: #write to tensorboard
             loss, current = loss.item(), epoch * batch * len(X)
             writer.add_scalar("Loss/train", loss, current)
             #returns a dictionary node:tensor (3x3) new/old/diff with meanabsval, range, var

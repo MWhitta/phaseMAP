@@ -28,17 +28,19 @@ def state_diff(new_dict, old_dict, type = 'model'):
             #going to populate a node dict with tensors of results
             #process node by node in the model across all three dicts
             for node in new_dict: #iterate keys, order maintained since python 3.6
-              summary = torch.zeros(3,3)
-              summary[0,0] = torch.mean(torch.abs(new_dict[node])).item()
-              summary[0,1] = torch.max(new_dict[node]).item() - torch.min(new_dict[node]).item()
-              summary[0,2] = torch.var(new_dict[node]).item()
-              summary[1,0] = torch.mean(torch.abs(old_dict[node])).item()
-              summary[1,1] = torch.max(old_dict[node]).item() - torch.min(old_dict[node]).item()
-              summary[1,2] = torch.var(old_dict[node]).item()
-              summary[2,0] = torch.mean(torch.abs(diff_dict[node])).item()
-              summary[2,1] = torch.max(diff_dict[node]).item() - torch.min(diff_dict[node]).item()
-              summary[2,2] = torch.var(diff_dict[node]).item()
-              results_dict[node] = summary
+                #don't process the counters for batchnorm nodes
+                if new_dict[node].dtype != torch.int64:
+                    summary = torch.zeros(3,3)
+                    summary[0,0] = torch.mean(torch.abs(new_dict[node])).item()
+                    summary[0,1] = torch.max(new_dict[node]).item() - torch.min(new_dict[node]).item()
+                    summary[0,2] = torch.var(new_dict[node]).item()
+                    summary[1,0] = torch.mean(torch.abs(old_dict[node])).item()
+                    summary[1,1] = torch.max(old_dict[node]).item() - torch.min(old_dict[node]).item()
+                    summary[1,2] = torch.var(old_dict[node]).item()
+                    summary[2,0] = torch.mean(torch.abs(diff_dict[node])).item()
+                    summary[2,1] = torch.max(diff_dict[node]).item() - torch.min(diff_dict[node]).item()
+                    summary[2,2] = torch.var(diff_dict[node]).item()
+                results_dict[node] = summary
             return results_dict
         
         case 'optimizer':
