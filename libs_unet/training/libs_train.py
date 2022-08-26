@@ -45,7 +45,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interva
                     node_dict['diff_rng'] = update_dict[key][2][1]
                     node_dict['diff_var'] = update_dict[key][2][2]
                     #write the node statistics to TB
-                    writer.add_scalars(key, node_dict, epoch * batch * len(X))
+                    writer.add_scalars(key, node_dict, epoch * batch_n * len(X))
                 
                 #store model dictionary state to compare against with next check            
                 init_dict = deepcopy(model.state_dict())
