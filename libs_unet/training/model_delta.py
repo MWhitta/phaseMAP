@@ -1,51 +1,38 @@
 import torch
 
-def state_diff(new_dict, old_dict, type = 'model'):
+def state_diff(new_param, init_wts):
 
     """ Function to evaluate changes to tunable model parameters during training.
         Arguments:
-            new_dict: current state dictionary
-            old_dict: prior state dictionary
-            type = 'model'|'optimizer'
+            new_param: current named_parameters() iter
+            init_wts: prior weights as dict
             
         Returns:
-            model: dict with same key structure as inputs, with summary and detail tensors
-                summary for each key: size(3,3) 
-                dim0: new, old, delta
-                dim1: meanabsval, range, var
-                #note delta is element-wise subtraction new-old
-            optimizer: dict of dict with var_name:{new:value, old:value}
+            model: dict with same key structure as inputs, with dict of results
+                {node1: {wt_norm:123, wt_var:456, wt_mad:23, grad_norm:123}}
+                
     """
     
     results_dict = {}
-    if type == 'model':
-        #calculate the corresponding dictionary of element-wise changes
-        diff_dict = {}
-        for key,value in new_dict.items():
-            diff_dict[key] = value - old_dict[key]
 
-        #going to populate a node dict with tensors of results
-        #process node by node in the model across all three dicts
-        for node in new_dict: #iterate keys, order maintained since python 3.6
-            #don't process the counters for batchnorm nodes
-            if new_dict[node].dtype != torch.int64:
-                summary = torch.zeros(3,3)
-                summary[0,0] = torch.mean(torch.abs(new_dict[node])).item()
-                summary[0,1] = torch.max(new_dict[node]).item() - torch.min(new_dict[node]).item()
-                summary[0,2] = torch.var(new_dict[node]).item()
-                summary[1,0] = torch.mean(torch.abs(old_dict[node])).item()
-                summary[1,1] = torch.max(old_dict[node]).item() - torch.min(old_dict[node]).item()
-                summary[1,2] = torch.var(old_dict[node]).item()
-                summary[2,0] = torch.mean(torch.abs(diff_dict[node])).item()
-                summary[2,1] = torch.max(diff_dict[node]).item() - torch.min(diff_dict[node]).item()
-                summary[2,2] = torch.var(diff_dict[node]).item()
-            results_dict[node] = summary
-        return results_dict
-    
-    elif type == 'optimizer':
-        for key, value in new_dict:
-            results_dict[key] = {"new":value, "old":old_dict[key]}
-        return results_dict
-    
-    else:
-        raise ValueError(f"Invalid type parameter {type} provided")
+    #iterators can only be traversed once so transform to dict
+    new_dict = {}
+    for k, v in new_param:
+        new_dict[k] = { 'wt':v, 'grad':v.grad }
+
+    #calculate the corresponding dictionary of element-wise wt changes
+    diff_dict = {}
+    for k,v in new_dict.items():
+        diff_dict[k] = v['wt'] - init_wts[k]
+    #process node by node in the model
+    for k, v in new_dict.items(): 
+        #don't process the counters for batchnorm nodes
+        if v['wt'].dtype != torch.int64:
+            results_dict[k] = {}
+            results_dict[k]['wt_norm'] = torch.linalg.vector_norm(v['wt'])
+            results_dict[k]['wt_var'] = torch.var(v['wt'])
+            results_dict[k]['wt_mad'] = torch.mean(torch.abs(diff_dict[k]))
+            results_dict[k]['grad_norm'] = torch.linalg.norm(v['grad'])
+            
+    return results_dict
+
