@@ -7,10 +7,10 @@ class double_conv(nn.Module):
     def __init__(self, in_c, out_c, padding=3, kernel_size=6):
         super().__init__()
         self.double_conv = nn.Sequential(
-        nn.Conv1d(in_c, out_c, padding=padding, kernel_size=kernel_size),
+        nn.Conv1d(in_c, out_c, padding=padding, kernel_size=kernel_size, bias=False),
         nn.BatchNorm1d(out_c),
         nn.ReLU(inplace=True),
-        nn.Conv1d(out_c, out_c, padding=padding, kernel_size=kernel_size),
+        nn.Conv1d(out_c, out_c, padding=padding, kernel_size=kernel_size, bias=False),
         nn.BatchNorm1d(out_c),
         nn.ReLU(inplace=True))
     
