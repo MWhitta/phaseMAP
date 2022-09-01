@@ -29,10 +29,10 @@ def state_diff(new_param, init_wts):
         #don't process the counters for batchnorm nodes
         if v['wt'].dtype != torch.int64:
             results_dict[k] = {}
-            results_dict[k]['wt_norm'] = torch.linalg.vector_norm(v['wt'])
+            results_dict[k]['wt_mav'] = torch.mean(torch.abs(v['wt']))
             results_dict[k]['wt_var'] = torch.var(v['wt'])
-            results_dict[k]['wt_mad'] = torch.mean(torch.abs(diff_dict[k]))
-            results_dict[k]['grad_norm'] = torch.linalg.norm(v['grad'])
+            results_dict[k]['wtdiff_mav'] = torch.mean(torch.abs(diff_dict[k]))
+            results_dict[k]['grad_mav'] = torch.mean(torch.abs(v['grad']))
             
     return results_dict
 
