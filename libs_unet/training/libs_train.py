@@ -2,7 +2,7 @@ import torch
 from libs_unet.training.model_delta import state_diff
 
 
-def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interval=10, debug=False):
+def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interval=10, debug=False, bsize=1):
     #capture starting state of model for difference reporting under debug
     if debug == True:
         #note named_parameters is an iterator
@@ -26,7 +26,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interva
         optimizer.step() #leverages tensor gradients from backward()
 
         if batch_n  % log_interval == 0: #write to tensorboard
-            loss, current = loss.item(), epoch * batch_n * len(X)
+            loss, current = loss.item(), epoch * batch_n * bsize
             writer.add_scalar("Loss/train", loss, current)
             #detailed logging on nodes info for debug=True
             if debug == True:
@@ -34,7 +34,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interva
                 update_dict = state_diff(model.named_parameters(), init_wts)
                 #print(update_dict.items())
                 for key, value in update_dict.items():
-                    writer.add_scalars(key, value, epoch * batch_n * len(X))
+                    writer.add_scalars(key, value, epoch * batch_n * bsize)
                 
                 #store model dictionary parameter state to compare against with next check            
                 for k, v in model.named_parameters():

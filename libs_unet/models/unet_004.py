@@ -25,7 +25,7 @@ def pad_1d(small, big):
 
 
 class LIBSUNet(nn.Module):
-    """ UNet for single channel LIBS speactra data """
+    """ UNet for single channel LIBS spectra data """
     def __init__(self, max_z, l_spec):
         super(LIBSUNet, self).__init__()
         #max_z defines #elements, we add artifact and noise channels
