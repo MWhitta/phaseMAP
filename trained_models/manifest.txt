@@ -1,0 +1,1 @@
+z20_pairs_0001 : trained with peakfinder_0001.py for 1,000 epochs at lr = 0.1 on data z20_pairs
