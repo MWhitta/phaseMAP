@@ -1,42 +1,48 @@
-import numpy as np
 import pickle
+import numpy as np
+
+from pathlib import Path
 from matplotlib import pyplot as plt
 from scipy.special import voigt_profile as voigt
-from pathlib import Path
 
 top_dir = Path(__file__).parent.parent.parent
 rel_path = 'data' 
 datapath = top_dir / rel_path
-datafile = "rel_int/top30_spec.pickle" #this is specific to the avail_elem for the class
+datafile = "rel_int/valid77_spec.pickle" #this is specific to the avail_elem for the class
 
 class spectrum_maker():
     #class docstring, parameters, public methods
     """ generates LIBS spectra """
     #class attributes
-    #First 30 elements
-    avail_elem = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 
-        'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn']
-    #Relative ppm of first 30 elements
-    elem_abund = elem_abund = np.loadtxt(datapath / "abundance/abundance_94.csv")[0:30]
-    
-    #TODO define an environment context and specify datapath there.
-    with open(datapath / datafile, 'rb') as f:
-        atom_dict = pickle.load(f)
-    
-    #Future elements?
-    """ ['Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 
-        'Sn', 'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 
-        'Ho', 'Er', 'Tm', 'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 
-        'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 
-        'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uut', 'Fl', 'Uup', 'Lv', 'Uus', 'Uuo'] """
-    
+
     def __init__(self, max_z: int) -> None:
-        if max_z > len(self.avail_elem):
-            raise ValueError(f"Currently supports only the first {len(self.avail.elem)} elements")
+        self.elem = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 
+        'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Ge', 
+        'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 
+        'Sn', 'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Dy', 
+        'Ho', 'Er', 'Tm', 'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Os', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 
+        'Po', 'At', 'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U']
+
+        #database missing data for these elements (either for neutral ion or for any transition)
+        self.no_lines = ['At', 'Es', 'Ir', 'Nb', 'Os', 'Pa', 'Pm', 'Po', 'Pr', 'Pu', 'Re', 'Rn', 'Se', 'Tb', 'Th', 'U', 'Zr']
+        # double check that no_lines elements aren't in avail_el
+        #TODO verify that no (neutral) lines exist for these elements
+        self.avail_elem = [el for el in self.elem if el not in self.no_lines]
+        
+        if len(self.avail_elem) < max_z:
+            max_z = len(self.elem)
+       
         self.max_z = max_z
-        self.elem_abund = self.elem_abund[:max_z]
         self.elements = self.avail_elem[:max_z]
-   
+
+        #Relative ppm of elements
+        self.elem_abund = np.loadtxt(datapath / "abundance/abundance_94.csv")
+        self.elem_abund = self.elem_abund[:max_z]
+ 
+        #TODO define an environment context and specify datapath there.
+        with open(datapath / datafile, 'rb') as f:
+            self.atom_dict = pickle.load(f)
+    
     #TODO reconsider if mixing dict and array style is worth it vs. strict ordered array conventions
 
     def peak_maker(self,
@@ -59,7 +65,7 @@ class spectrum_maker():
         rel_int = self.atom_dict[element][:,1]
         if plot:
         #    plot histogram of element intensities
-            plt.bar(x=peak_loc, height=rel_int, width=3,color="red")
+            plt.bar(x=peak_loc, height=rel_int, width=3, color="red")
             plt.xlabel('wavelength [nm]')
             plt.ylabel('intensity')
             plt.xlim([190, 950]) #note data may go beyond this range
@@ -127,10 +133,10 @@ class spectrum_maker():
 
         #gen individual element spectra and combine into weighted sum. (weighted sum should remain 1.0)
         for i in range(self.max_z): #considered np.nonzero() syntax but opaque
-            if fracs[i] > 0:#only process elements with non-zero weight
+            if fracs[i] > 0: #only process elements with non-zero weight
         #TODO add logic here to vary peak_maker parameters randomly
         # use **kwargs to pass on parameters from this method invocation to next
-                _, spec_array[i] = self.peak_maker(self.elements[i], shift=True, height=True)
+                _, spec_array[i] = self.peak_maker(self.elements[i], height=True)
                 spec_array[i] = fracs[i] * spec_array[i]
         
         #aggregate the weighted spectra to componsite, figure the maximum peak, scale spectrum
@@ -171,7 +177,7 @@ class spectrum_maker():
         spec = np.where(spec + noi < 0, 0, spec + noi)
         spec /= np.sum(spec)
 
-        return wave, spec, spec_array
+        return wave.astype('float32'), spec.astype('float32'), spec_array.astype('float32')
     
     def batch_spectra(self,
         focus_el=[], #optional list of specific elements within class max_z
@@ -234,4 +240,32 @@ class spectrum_maker():
                                                         artifact=artifact, art_type=art_type, art_mag=art_mag,
                                                         noise=noise, noise_type=noise_type,snr=snr)
         
-        return fracs, wave, x_data, y_data
+        return fracs.astype('float32'), wave.astype('float32'), x_data.astype('float32'), y_data.astype('float32')
+
+
+    def batch_pt(self,
+        inc=1,
+        w_lo=190, # lower limit of spectrum
+        w_hi=950, # upper limit of spectrum
+        artifact=False, # flag to include spectral artifacts ('constant', 'square', or 'Gaussian')
+        art_type=['square', 'Gaussian'], # types of artifacts to be included - must be a list for now
+        art_mag=0.1, # relative magnitude of artifact to spectrum intensity
+        noise=False, # noise flag
+        noise_type='Gaussian', # noise type
+        snr=10):
+
+        wave = np.arange(w_lo,w_hi,inc) #only needed for correct length
+        wave_len = len(wave) # length of wave for proper sizing of output arrays
+                        
+        x_data = np.zeros((self.max_z, wave_len))
+        y_data = np.zeros((self.max_z, int(self.max_z+2), wave_len))
+        fracs = np.identity(self.max_z) # for single element spectra
+        
+        #note the wave range generated from w_lo, w_hi, inc is going to be same in each sample
+        # make_spectra also returns composite spectra and array of weighted element spectra, artifacts, noise
+        for i in np.arange(self.max_z):
+            wave, x_data[i], y_data[i] = self.make_spectra(fracs=fracs[i], inc=inc, w_lo=w_lo, w_hi=w_hi, 
+                                                        artifact=artifact, art_type=art_type, art_mag=art_mag,
+                                                        noise=noise, noise_type=noise_type, snr=snr)
+        
+        return fracs.astype('float32'), wave.astype('float32'), x_data.astype('float32'), y_data.astype('float32')
