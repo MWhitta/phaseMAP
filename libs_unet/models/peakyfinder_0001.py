@@ -34,11 +34,14 @@ class LIBSUNet(nn.Module):
         self.l_spec = l_spec
         chan = self.channels
           
-        self.max_pool = nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
         self.down_conv_1 = double_conv(1, chan)
+        self.max_pool_1 = nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
         self.down_conv_2 = double_conv(chan, 2*chan)
+        self.max_pool_2 = nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
         self.down_conv_3 = double_conv(2*chan, 4*chan)
+        self.max_pool_3 = nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
         self.down_conv_4 = double_conv(4*chan, 8*chan)
+        self.max_pool_4 = nn.MaxPool1d(kernel_size=2, stride=2, padding=1)
         self.down_conv_5 = double_conv(8*chan, 16*chan)
 
         self.up_trans_1 = nn.ConvTranspose1d(
@@ -72,13 +75,13 @@ class LIBSUNet(nn.Module):
     def forward(self, spec):
         #encoder, spec is the input array for composite spectrum
         x1 = self.down_conv_1(spec)
-        x2 = self.max_pool(x1)
+        x2 = self.max_pool_1(x1)
         x3 = self.down_conv_2(x2)
-        x4 = self.max_pool(x3)
+        x4 = self.max_pool_2(x3)
         x5 = self.down_conv_3(x4)
-        x6 = self.max_pool(x5)
+        x6 = self.max_pool_3(x5)
         x7 = self.down_conv_4(x6)
-        x8 = self.max_pool(x7)
+        x8 = self.max_pool_4(x7)
         x9 = self.down_conv_5(x8)
 
         # #decoder
