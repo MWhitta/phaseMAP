@@ -9,10 +9,10 @@ class double_conv(nn.Module):
         self.double_conv = nn.Sequential(
         nn.Conv1d(in_c, out_c, padding=padding, kernel_size=kernel_size, bias=False),
         nn.BatchNorm1d(out_c),
-        nn.ReLU(inplace=True),
+        nn.ReLU(),
         nn.Conv1d(out_c, out_c, padding=padding, kernel_size=kernel_size, bias=False),
         nn.BatchNorm1d(out_c),
-        nn.ReLU(inplace=True))
+        nn.ReLU())
     
     def forward(self, x):
         return self.double_conv(x)
