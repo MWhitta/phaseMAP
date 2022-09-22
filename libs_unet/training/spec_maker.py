@@ -7,37 +7,18 @@ from pathlib import Path
 top_dir = Path(__file__).parent.parent.parent
 rel_path = 'data' 
 datapath = top_dir / rel_path
-datafile = "rel_int/top30_spec.pickle" #this is specific to the avail_elem for the class
+datafile = "rel_int/valid77_spec.pickle" #this is specific to the avail_elem for the class
+#create element list for this data file
+with open(datapath / datafile, 'rb') as f:
+    atom_dict = pickle.load(f)
+avail_elem = [key for key in atom_dict.keys()]
 
 class spectrum_maker():
     #class docstring, parameters, public methods
     """ generates LIBS spectra """
-    #class attributes
-    #First 30 elements
-    avail_elem = ['H', 'He', 'Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne', 'Na', 'Mg', 'Al', 'Si', 'P', 
-        'S', 'Cl', 'Ar', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe', 'Co', 'Ni', 'Cu', 'Zn']
-    #Relative ppm of first 30 elements
-    elem_abund = elem_abund = np.loadtxt(datapath / "abundance/abundance_94.csv")[0:30]
-    
-    #TODO define an environment context and specify datapath there.
-    with open(datapath / datafile, 'rb') as f:
-        atom_dict = pickle.load(f)
-    
-    #Future elements?
-    """ ['Ga', 'Ge', 'As', 'Se', 'Br', 'Kr', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc', 'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 
-        'Sn', 'Sb', 'Te', 'I', 'Xe', 'Cs', 'Ba', 'La', 'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 
-        'Ho', 'Er', 'Tm', 'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl', 'Pb', 'Bi', 
-        'Po', 'At', 'Rn', 'Fr', 'Ra', 'Ac', 'Th', 'Pa', 'U', 'Np', 'Pu', 'Am', 'Cm', 'Bk', 'Cf', 'Es', 'Fm', 
-        'Md', 'No', 'Lr', 'Rf', 'Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn', 'Uut', 'Fl', 'Uup', 'Lv', 'Uus', 'Uuo'] """
-    
-    def __init__(self, max_z: int) -> None:
-        if max_z > len(self.avail_elem):
-            raise ValueError(f"Currently supports only the first {len(self.avail.elem)} elements")
-        self.max_z = max_z
-        self.elem_abund = self.elem_abund[:max_z]
-        self.elements = self.avail_elem[:max_z]
-   
-    #TODO reconsider if mixing dict and array style is worth it vs. strict ordered array conventions
+
+    def __init__(self) -> None:
+        super().__init__()
 
     def peak_maker(self,
     element,
@@ -55,8 +36,8 @@ class spectrum_maker():
     height_mag=0.001,
     plot=False):
         
-        peak_loc = self.atom_dict[element][:,0]
-        rel_int = self.atom_dict[element][:,1]
+        peak_loc = atom_dict[element][:,0]
+        rel_int = atom_dict[element][:,1]
         if plot:
         #    plot histogram of element intensities
             plt.bar(x=peak_loc, height=rel_int, width=3,color="red")
@@ -104,7 +85,7 @@ class spectrum_maker():
     
     #make_spectra provides the weighted superposition of peak_maker spectra with artifacts/noise added
     def make_spectra(self, 
-        fracs, #element relative element proportion array, must be length = max_z of instance
+        fracs_dict, #dict of element of positive fractions/proportions (will normalize to sum 1)
         inc=1,
         w_lo=190, # lower limit of spectrum
         w_hi=950, # upper limit of spectrum
@@ -115,65 +96,73 @@ class spectrum_maker():
         noise_type='Gaussian', # noise type
         snr=10):
         
-        if len(fracs) != self.max_z:
-            raise ValueError(f"First {self.max_z} elements configured, {len(fracs)} provided.")
-        if not (all(x >=0 for x in fracs) and np.sum(fracs) > 0):
-            raise ValueError("Element fractions must be non-negative and sum must be non-zero")
+        wave = np.arange(w_lo, w_hi, inc)
+        frac_total = 0
+        for k, v in fracs_dict.items():
+            frac_total += v
+            if k not in atom_dict.keys():
+                raise ValueError(f"Unsupported element {k}")
+            if v < 0:
+                raise ValueError("Element fractions must be non-negative")
+        if frac_total <= 0:
+            raise ValueError("Positive element fractions required")
         
         #scale fractions to sum to 1.0
-        fracs = fracs/np.sum(fracs)
-        wave = np.arange(w_lo, w_hi, inc)
-        spec_array = np.zeros((self.max_z, len(wave)))
+        for k, v in fracs_dict.items():
+            fracs_dict[k] = v / frac_total
+
 
         #gen individual element spectra and combine into weighted sum. (weighted sum should remain 1.0)
-        for i in range(self.max_z): #considered np.nonzero() syntax but opaque
-            if fracs[i] > 0:#only process elements with non-zero weight
-        #TODO add logic here to vary peak_maker parameters randomly
-        # use **kwargs to pass on parameters from this method invocation to next
-                _, spec_array[i] = self.peak_maker(self.elements[i], shift=True, height=True)
-                spec_array[i] = fracs[i] * spec_array[i]
+        spec = np.zeros(len(wave)) #composite of weighted atomic spectra
+        wave = np.arange(w_lo, w_hi, inc)
+        spec_dict = {k:np.zeros(len(wave)) for k in fracs_dict.keys()}
+        for elem, frac in fracs_dict.items():
+            if frac > 0:#only process elements with non-zero weight
+        # TODO use **kwargs to pass on parameters from this method invocation to next
+                _, spec_dict[elem] = self.peak_maker(elem)
+                spec_dict[elem] = fracs_dict[elem] * spec_dict[elem]
+                spec += spec_dict[elem]
         
-        #aggregate the weighted spectra to componsite, figure the maximum peak, scale spectrum
-        spec = np.sum(spec_array, axis=0) #note that axis is the one you are collapsing, e.g. leaves columns
+        #rescale
         spec /= np.sum(spec)
         maximum = np.max(spec)
         
         # --- add artifacts
-        art = np.zeros(len(spec))
+        spec_dict['art'] = np.zeros(len(wave))
         if artifact:
             if any([i=='const' for i in art_type]):
-                art += art_mag * maximum
+                spec_dict['art'] += art_mag * maximum
                 
             if any([i=='square' for i in art_type]):
                 lim = np.sort(np.random.choice(wave, 2))
                 idx = (wave>lim[0]) * (wave<lim[1])
                 sq_loc = np.where(idx)[0]
                 art_scale = art_mag * maximum
-                art[sq_loc] += art_scale
+                spec_dict['art'][sq_loc] += art_scale
                 
             if any([i=='Gaussian' for i in art_type]):
                 #TODO check if sigma should be parametrized with method arg
                 sigma = (w_hi-w_lo)*0.5
                 mu = np.random.randint(w_lo,w_hi)
                 bg = 100 * np.random.rand() * maximum * 1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (wave - mu)**2 / (2 * sigma**2))
-                art += bg
+                spec_dict['art'] += bg
                 
-        spec += art
-        spec_array = np.append(spec_array, np.expand_dims(art, 0), axis=0)
+        spec += spec_dict['art']
         # --- add noise
-        noi = np.zeros(len(spec))
+        spec_dict['noi'] = np.zeros(len(wave))
         if noise:
             if noise_type=='Gaussian':
-                noi += np.random.normal(0, 1/snr**0.5, len(noi))
+                spec_dict['noi'] += np.random.normal(0, 1/snr**0.5, len(wave))
         
         #limit the net spectrum to nonnegative intensity values
-        spec_array = np.append(spec_array, np.expand_dims(noi, 0), axis=0)
-        spec = np.where(spec + noi < 0, 0, spec + noi)
+        spec = np.where(spec + spec_dict['noi'] < 0, 0, spec + spec_dict['noi'])
         spec /= np.sum(spec)
 
-        return wave, spec, spec_array
-    
-    def batch_spectra(self,
+        return wave, spec, spec_dict
+
+        
+    #TODO
+    """ def batch_spectra(self,
         focus_el=[], #optional list of specific elements within class max_z
         n_elem=4, #defines the mean number of elements included
         n_delta=2, #defines the +/- range for number of elements to vary
@@ -234,4 +223,4 @@ class spectrum_maker():
                                                         artifact=artifact, art_type=art_type, art_mag=art_mag,
                                                         noise=noise, noise_type=noise_type,snr=snr)
         
-        return fracs, wave, x_data, y_data
+        return fracs, wave, x_data, y_data """
