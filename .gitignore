@@ -2,6 +2,8 @@
 envs/
 #exclude training data
 data/training/
+#exclude trained models
+trained_models/
 #exclude tensorboard and other instrumentation files
 runs/
 wandb/
