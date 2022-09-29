@@ -39,14 +39,27 @@ for i in range(max_z):
 def spec_resid(x, x_spec, ref_specs):
     return np.squeeze(np.sum((ref_specs.transpose() * x).transpose(), axis=0) - x_spec)
 
-def fit_spec(x_spec, exp_wave=wave):
-    if not np.array_equal(exp_wave, wave):
-        raise ValueError("Experimental wavelength domain does not match model")
-    if type(x_spec) != np.ndarray:
-        raise ValueError("Spectrum data type must be numpy.ndarray")
-    if len(x_spec) != len(wave):
-        raise ValueError("Spectrum array length does not match model")
+#function designed to fit data from 2D array where each row is wavelength, intensity
+def fit_spec(libs_spec):
+    if libs_spec.shape[1] != 2 or type(libs_spec) != np.ndarray:
+        raise ValueError("Invalid libs spectrum. 2D numpy.array required.")
+    libs_wave = libs_spec[:,0]
+    libs_intens = libs_spec[:,1]
+    #Convert input data to model format if needed
+    if not np.array_equal(libs_wave, wave):
+        wave_dict = {wl:0 for wl in wave}
+        for i in range(len(libs_wave)):
+            int_wl = np.round(libs_wave[i],0)
+            if int_wl in wave_dict:
+                wave_dict[int_wl] += libs_intens[i]
+        x_spec = np.array([])
+        for wl, intens in wave_dict.items():
+            x_spec = np.append(x_spec, intens)
+    else:
+        x_spec = libs_intens
     
+    #scale the spectrum to unit intensity
+    x_spec /= np.sum(x_spec)
     #Transform the input spectrum to model domain
     x_spec_tensor = torch.tensor(x_spec.astype('float32'))[None,None,:]
     x_spec_trans = input_scale * torch.log(rel_int_scale * x_spec_tensor + 1)
