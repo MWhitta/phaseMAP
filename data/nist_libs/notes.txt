@@ -1,0 +1,16 @@
+Data files generated for the elements in el_symbols from
+https://physics.nist.gov/PhysRefData/ASD/LIBS/libs-form.html
+For each element:
+Percentage: 100
+Lower WL: 180
+Upper WL: 961
+Wavelengths in: Vacuum (< 200 nm) Air (200 - 2000 nm) Vacuum (> 2000 nm)
+Units: nm
+Resolution: 1000
+Te(eV): 1
+Ne(cm^-3): 1e17
+
+Click Retrieve Data
+Tick "show stick plot" 
+Click CSV (new tab opens)
+Copy All - Paste into EL.csv (EL for element symbol)
