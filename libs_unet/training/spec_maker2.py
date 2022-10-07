@@ -82,6 +82,7 @@ class spectrum_maker():
     #make_spectra calculates the weighted combination of atomic lines and returns the composite spectrum
     def make_spectra(self, 
         fracs_dict, #dict of element of positive fractions/proportions (will normalize to sum 1)
+        rescale = True, #if true fractions rescaled to sum=1
         artifact=False, # flag to include spectral artifacts ('constant', 'square', or 'Gaussian')
         art_type=['square', 'Gaussian'], # types of artifacts to be included - must be a list for now
         art_mag=0.1, # relative magnitude of artifact to spectrum intensity
@@ -100,15 +101,21 @@ class spectrum_maker():
             raise ValueError("Positive element fractions required")
         
         #scale fractions to sum to 1.0
-        for k, v in fracs_dict.items():
-            fracs_dict[k] = v / frac_total
+        if rescale == True:
+            for k, v in fracs_dict.items():
+                fracs_dict[k] = v / frac_total
 
         #create dictionary of weighted atomic lines to combine
         lines_dict = { el : frac * atom_lines[el] for el,frac in fracs_dict.items() }
+        spec_dict = {} #store weighted line spectrum for each element to return
         comp_lines = np.zeros(len(wave))
         for el in lines_dict.keys():
             comp_lines += lines_dict[el] #composite lines array to make spectra
+            #generate the weighted line spectrum for this element only
+            _, spec_dict[el] = self.peak_maker(wave, lines_dict[el])
+        
         lines_dict['comp'] = comp_lines
+        
         
         #create composite spectrum
         _, spec = self.peak_maker(wave, lines_dict['comp'])
@@ -134,8 +141,10 @@ class spectrum_maker():
                 mu = np.random.randint(w_lo,w_hi)
                 bg = 100 * np.random.rand() * maximum * 1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (wave - mu)**2 / (2 * sigma**2))
                 art_mod += bg
-                
+        
+        spec_dict['art'] = art_mod        
         spec += art_mod
+        
         # --- add noise
         noise_mod = np.zeros(len(wave))
         if noise:
@@ -143,9 +152,10 @@ class spectrum_maker():
                 noise_mod += np.random.normal(0, 1/snr**0.5, len(wave))
         
         #limit the net spectrum to nonnegative intensity values
-        spec = np.where(spec + noise_mod < 0, 0, spec + noise_mod)
-
-        return wave, spec, lines_dict
+        spec_pre = np.ndarray.copy(spec) #store initial to back out net noise modification
+        spec_dict['comp'] = np.where(spec + noise_mod < 0, 0, spec + noise_mod)
+        spec_dict['noi'] = spec_dict['comp'] - spec_pre
+        return wave, spec_dict, lines_dict
 
         
     #TODO
