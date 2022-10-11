@@ -1,8 +1,9 @@
 import torch
+import torch.nn as nn
 from libs_unet.training.model_delta import state_diff
 
 
-def train_loop(dataloader, model, loss_fn, loss_wts, optimizer, writer, epoch, log_interval=10, debug=False, bsize=1):
+def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interval=10, debug=False, bsize=1):
     #capture starting state of model for difference reporting under debug
     if debug == True:
         #note named_parameters is an iterator
@@ -18,7 +19,7 @@ def train_loop(dataloader, model, loss_fn, loss_wts, optimizer, writer, epoch, l
         batch_n = batch+1
         # Compute prediction and loss
         pred = model(X)
-        loss = loss_fn(pred, y, loss_wts)
+        loss = loss_fn(pred, y)
 
         # Backpropagation
         optimizer.zero_grad()
@@ -42,22 +43,27 @@ def train_loop(dataloader, model, loss_fn, loss_wts, optimizer, writer, epoch, l
     return loss
 
 
-def test_loop(dataloader, model, loss_fn, loss_wts, writer, epoch):
+def test_loop(dataloader, model, loss_fn, writer, epoch):
     num_batches = len(dataloader)
     test_loss = 0
     model.eval()
     with torch.no_grad():
         for X, y in dataloader:
             pred = model(X)
-            test_loss += loss_fn(pred, y, loss_wts).item()
+            test_loss += loss_fn(pred, y).item()
 
     test_loss /= num_batches #should be a mean of batch means
     writer.add_scalar("Loss/valid", test_loss, epoch)
     #print(f"Test Error: \n Avg loss: {test_loss:.7E} \n")
     return test_loss
 
- 
-def weighted_mse_loss(input, target, weight):
-    el_err = torch.sum(((input - target) ** 2), axis=2)
-    el_wt_err = torch.mul(el_err, weight)
-    return torch.mean(el_wt_err)
+class Custom_Wgt_MSE(nn.Module): 
+    def __init__(self, weights):
+        super().__init__()
+        self.weights = weights
+    
+    def forward(self, input, target):
+        el_err = torch.sum(((input - target) ** 2), axis=2)
+        el_wt_err = torch.mul(el_err, self.weights)
+        loss_value = torch.mean(el_wt_err)
+        return loss_value
