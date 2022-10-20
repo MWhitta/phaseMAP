@@ -7,23 +7,25 @@ from scipy.optimize import least_squares
 
 import torch
 from libs_unet.models import peakyfinder_0001
-from libs_unet.training.spec_maker import spectrum_maker
+from libs_unet.training.spec_maker2 import spectrum_maker
 
 top_dir = Path(__file__).parent.parent.parent
-rel_path = 'data' 
-datapath = top_dir / rel_path
+datapath = top_dir / 'data'
+#configure these with model updates to latest version
+meta_path = datapath / 'training' / 'el80_meta.pickle'
+model_param_path = top_dir / 'trained_models' / 'el80_pairs_lg_0001'
+
 
 #Model specific parameters/files here. Update as models change
 #Reference data, used but not changed within classes
-with open(datapath / 'training' / 'el77_meta.pickle', 'rb') as f:
+with open(meta_path, 'rb') as f:
     wave = pickle.load(f)
     el_symbol = pickle.load(f)
     el_index = pickle.load(f)
 
 max_z = len(el_symbol)
 model = peakyfinder_0001.LIBSUNet(max_z,len(wave))
-param_path = top_dir / 'trained_models' / 'el77_pairs_0001'
-model.load_state_dict(torch.load(param_path))
+model.load_state_dict(torch.load(model_param_path))
 rel_int_scale = 10**4
 input_scale = 5
 thresh = 7
