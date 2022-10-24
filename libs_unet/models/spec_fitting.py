@@ -1,22 +1,22 @@
 # This module contains the classes/functions associated with applying 
 # a trained model to unknown LIBS spectra
+import torch
 import pickle
 import numpy as np
 from pathlib import Path
 from scipy.optimize import least_squares
-
-import torch
 from libs_unet.models import peakyfinder_0001
-from libs_unet.training.spec_maker2 import spectrum_maker
+from libs_unet.training.spec_maker import spectrum_maker
 
 top_dir = Path(__file__).parent.parent.parent
 datapath = top_dir / 'data'
-#configure these with model updates to latest version
-meta_path = datapath / 'training' / 'el80_meta.pickle'
+#configure these with model updates to latest version, perhaps pull into config
+meta_path = datapath / 'training' / 'el80_pairs_meta.pickle'
 model_param_path = top_dir / 'trained_models' / 'el80_pairs_lg_0001'
+nist_mult = 1.17 #based on Li2CO3 peak height at 10,000
+id_thresh = 2 #identify elements predicted with max peak over this
+fit_tol = 0.01 #zero out LS fit weights under this level
 
-
-#Model specific parameters/files here. Update as models change
 #Reference data, used but not changed within classes
 with open(meta_path, 'rb') as f:
     wave = pickle.load(f)
@@ -26,23 +26,20 @@ with open(meta_path, 'rb') as f:
 max_z = len(el_symbol)
 model = peakyfinder_0001.LIBSUNet(max_z,len(wave))
 model.load_state_dict(torch.load(model_param_path))
-rel_int_scale = 10**4
-input_scale = 5
-thresh = 7
-fit_tol = 0.01
+
 #Generate atomic reference spectra
 spec_maker = spectrum_maker()
-el_spec = np.zeros((max_z,760))
+el_spec = np.zeros((max_z,len(wave)))
 for i in range(max_z):
     fracs_dict = {el_symbol[i]:1}
-    wave, el_spec[i], spec_dict = spec_maker.make_spectra(fracs_dict)
-
+    wave, spec_dict, lines_dict = spec_maker.make_spectra(fracs_dict)
+    el_spec[i] = spec_dict['comp']
 
 def spec_resid(x, x_spec, ref_specs):
     return np.squeeze(np.sum((ref_specs.transpose() * x).transpose(), axis=0) - x_spec)
 
 #function designed to fit data from 2D array where each row is wavelength, intensity
-def fit_spec(libs_spec):
+def fit_spec(libs_spec, spec_mult): #spec mult calibrated for 1nm resolution
     if libs_spec.shape[1] != 2 or type(libs_spec) != np.ndarray:
         raise ValueError("Invalid libs spectrum. 2D numpy.array required.")
     libs_wave = libs_spec[:,0]
@@ -59,18 +56,17 @@ def fit_spec(libs_spec):
             x_spec = np.append(x_spec, intens)
     else:
         x_spec = libs_intens
+    x_spec = spec_mult * x_spec
     
-    #scale the spectrum to unit intensity
-    x_spec /= np.sum(x_spec)
     #Transform the input spectrum to model domain
     x_spec_tensor = torch.tensor(x_spec.astype('float32'))[None,None,:]
-    x_spec_trans = input_scale * torch.log(rel_int_scale * x_spec_tensor + 1)
+    x_spec_trans = torch.log(x_spec_tensor + 1)
     #Run through model and obtain predicted elements
     model.eval()
     with torch.no_grad():
         y_pred = model(x_spec_trans).detach().numpy()
-    y_pred = np.squeeze(y_pred) #(max_z,760)
-    el_pred = 1*(np.max(y_pred[0:max_z,:], axis=1) > thresh)
+    y_pred = np.squeeze(y_pred)
+    el_pred = 1*(np.max(y_pred[0:max_z,:], axis=1) > id_thresh)
 
     #Obtain element weights from least squares fit to input spectrum
     #define bounds based on elements identified by prediction

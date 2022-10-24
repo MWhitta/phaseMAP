@@ -6,12 +6,15 @@ from pathlib import Path
 
 top_dir = Path(__file__).parent.parent.parent
 rel_path = 'data' 
-datapath = top_dir / rel_path
-datafile = "rel_int/valid77_spec.pickle" #this is specific to the avail_elem for the class
+datapath = top_dir / 'data' / 'nist_libs'
+lines_file = "nist_elem_libs.pickle"
 #create element list for this data file
-with open(datapath / datafile, 'rb') as f:
-    atom_dict = pickle.load(f)
-avail_elem = [key for key in atom_dict.keys()]
+with open(datapath / lines_file, 'rb') as f:
+    wave = pickle.load(f)
+    atom_lines = pickle.load(f)
+avail_elem = [key for key in atom_lines.keys()]
+w_lo = np.min(wave)
+w_hi = np.max(wave)
 
 class spectrum_maker():
     #class docstring, parameters, public methods
@@ -20,11 +23,10 @@ class spectrum_maker():
     def __init__(self) -> None:
         super().__init__()
 
+#peak_maker receives an array of line locations/intensities and creates peaks with optional perturbations
     def peak_maker(self,
-    element,
-    inc=1,
-    w_lo=190,
-    w_hi=950,
+    line_loc,
+    lines,
     voigt_sig=1,#stdev of normal part of voigt convolution
     voigt_gam=1, #half-width at half max parameter of cauchy part of convolution
     shift=False,
@@ -36,59 +38,51 @@ class spectrum_maker():
     height_mag=0.001,
     plot=False):
         
-        peak_loc = atom_dict[element][:,0]
-        rel_int = atom_dict[element][:,1]
         if plot:
-        #    plot histogram of element intensities
-            plt.bar(x=peak_loc, height=rel_int, width=3,color="red")
+        #    plot histogram of line intensities
+            plt.bar(x=line_loc, height=lines, width=3,color="red")
             plt.xlabel('wavelength [nm]')
             plt.ylabel('intensity')
-            plt.xlim([190, 950]) #note data may go beyond this range
+            plt.xlim([w_lo, w_hi])
             plt.show
-        
-        peak_count = len(rel_int)
-        wave = np.arange(w_lo, w_hi, inc)
         
         # jitter peak positions and intensities
         if shift:
             if shift_type=='sys': # apply systematic peak shift
-                peak_loc = peak_loc + shift_mean
+                line_loc = line_loc + shift_mean
             if shift=='random': # apply random peak wavelength shift, mean 0
-                mag = shift_mean * (np.random.rand(peak_count) - 0.5)
-                peak_loc = peak_loc + mag
+                mag = shift_mean * (np.random.rand(len(line_loc)) - 0.5)
+                line_loc = line_loc + mag
         
         if height:
             if height_type=='random':
-                h_mult = np.random.rand(peak_count) + 0.5 #min 0.5, mean 1.0, max 1.5
-                rel_int = rel_int * h_mult
-                rel_int = rel_int / np.sum(rel_int, axis=0) #re-scale to 1.0
+                h_mult = np.random.rand(len(line_loc)) + 0.5 #min 0.5, mean 1.0, max 1.5
+                lines = lines * h_mult
             if height_type=='lin':
-                h_add = height_mag * peak_loc + height_mean
-                rel_int = np.where(rel_int + h_add < 0, 0, rel_int + h_add)
-                rel_int = rel_int / np.sum(rel_int, axis=0) #re-scale to 1.0
+                h_add = height_mag * lines + height_mean
+                lines = lines + h_add
         
-        # create peaks with defined Voigt profiles from peak location and intensities derived from database
-        peaks = np.array([a * voigt(wave - x, voigt_sig, voigt_gam) for a, x in zip(rel_int, peak_loc)])
-        #sum the wave profiles across all the (rel_int, peak_loc) tuples, now smoothed spectra  on range w_lo:w_hi
+        lines[lines < 0] = 0 #no negative intensities 
+        
+        # create peaks with defined Voigt profiles from peak location and intensities 
+        peaks = np.array([a * voigt(wave - x, voigt_sig, voigt_gam) for a, x in zip(lines, line_loc)])
+        #sum the wave profiles across all the (intensity, loc) tuples, now smoothed spectra  on range w_lo:w_hi
         #scale the end result
         spec = np.sum(peaks, axis=0)
-        spec = spec/np.sum(spec)
         
         if plot:
             plt.plot(wave, spec)
             plt.xlabel('wavelength [nm]')
             plt.ylabel('intensity')
-            plt.xlim([190, 950])
+            plt.xlim([w_lo, w_hi])
             plt.show
         
         return wave, spec    
     
-    #make_spectra provides the weighted superposition of peak_maker spectra with artifacts/noise added
+    #make_spectra calculates the weighted combination of atomic lines and returns the composite spectrum
     def make_spectra(self, 
         fracs_dict, #dict of element of positive fractions/proportions (will normalize to sum 1)
-        inc=1,
-        w_lo=190, # lower limit of spectrum
-        w_hi=950, # upper limit of spectrum
+        rescale = True, #if true fractions rescaled to sum=1
         artifact=False, # flag to include spectral artifacts ('constant', 'square', or 'Gaussian')
         art_type=['square', 'Gaussian'], # types of artifacts to be included - must be a list for now
         art_mag=0.1, # relative magnitude of artifact to spectrum intensity
@@ -96,11 +90,10 @@ class spectrum_maker():
         noise_type='Gaussian', # noise type
         snr=10):
         
-        wave = np.arange(w_lo, w_hi, inc)
         frac_total = 0
         for k, v in fracs_dict.items():
             frac_total += v
-            if k not in atom_dict.keys():
+            if k not in avail_elem:
                 raise ValueError(f"Unsupported element {k}")
             if v < 0:
                 raise ValueError("Element fractions must be non-negative")
@@ -108,57 +101,61 @@ class spectrum_maker():
             raise ValueError("Positive element fractions required")
         
         #scale fractions to sum to 1.0
-        for k, v in fracs_dict.items():
-            fracs_dict[k] = v / frac_total
+        if rescale == True:
+            for k, v in fracs_dict.items():
+                fracs_dict[k] = v / frac_total
 
-
-        #gen individual element spectra and combine into weighted sum. (weighted sum should remain 1.0)
-        spec = np.zeros(len(wave)) #composite of weighted atomic spectra
-        wave = np.arange(w_lo, w_hi, inc)
-        spec_dict = {k:np.zeros(len(wave)) for k in fracs_dict.keys()}
-        for elem, frac in fracs_dict.items():
-            if frac > 0:#only process elements with non-zero weight
-        # TODO use **kwargs to pass on parameters from this method invocation to next
-                _, spec_dict[elem] = self.peak_maker(elem)
-                spec_dict[elem] = fracs_dict[elem] * spec_dict[elem]
-                spec += spec_dict[elem]
+        #create dictionary of weighted atomic lines to combine
+        lines_dict = { el : frac * atom_lines[el] for el,frac in fracs_dict.items() }
+        spec_dict = {} #store weighted line spectrum for each element to return
+        comp_lines = np.zeros(len(wave))
+        for el in lines_dict.keys():
+            comp_lines += lines_dict[el] #composite lines array to make spectra
+            #generate the weighted line spectrum for this element only
+            _, spec_dict[el] = self.peak_maker(wave, lines_dict[el])
         
-        #rescale
-        spec /= np.sum(spec)
+        lines_dict['comp'] = comp_lines
+        
+        
+        #create composite spectrum
+        _, spec = self.peak_maker(wave, lines_dict['comp'])
+        
         maximum = np.max(spec)
         
         # --- add artifacts
-        spec_dict['art'] = np.zeros(len(wave))
+        art_mod = np.zeros(len(wave))
         if artifact:
             if any([i=='const' for i in art_type]):
-                spec_dict['art'] += art_mag * maximum
+                art_mod += art_mag * maximum
                 
             if any([i=='square' for i in art_type]):
                 lim = np.sort(np.random.choice(wave, 2))
                 idx = (wave>lim[0]) * (wave<lim[1])
                 sq_loc = np.where(idx)[0]
                 art_scale = art_mag * maximum
-                spec_dict['art'][sq_loc] += art_scale
+                art_mod[sq_loc] += art_scale
                 
             if any([i=='Gaussian' for i in art_type]):
                 #TODO check if sigma should be parametrized with method arg
                 sigma = (w_hi-w_lo)*0.5
                 mu = np.random.randint(w_lo,w_hi)
                 bg = 100 * np.random.rand() * maximum * 1/(sigma * np.sqrt(2 * np.pi)) * np.exp( - (wave - mu)**2 / (2 * sigma**2))
-                spec_dict['art'] += bg
-                
-        spec += spec_dict['art']
+                art_mod += bg
+        
+        spec_dict['art'] = art_mod        
+        spec += art_mod
+        
         # --- add noise
-        spec_dict['noi'] = np.zeros(len(wave))
+        noise_mod = np.zeros(len(wave))
         if noise:
             if noise_type=='Gaussian':
-                spec_dict['noi'] += np.random.normal(0, 1/snr**0.5, len(wave))
+                noise_mod += np.random.normal(0, 1/snr**0.5, len(wave))
         
         #limit the net spectrum to nonnegative intensity values
-        spec = np.where(spec + spec_dict['noi'] < 0, 0, spec + spec_dict['noi'])
-        spec /= np.sum(spec)
-
-        return wave, spec, spec_dict
+        spec_pre = np.ndarray.copy(spec) #store initial to back out net noise modification
+        spec_dict['comp'] = np.where(spec + noise_mod < 0, 0, spec + noise_mod)
+        spec_dict['noi'] = spec_dict['comp'] - spec_pre
+        return wave, spec_dict, lines_dict
 
         
     #TODO
