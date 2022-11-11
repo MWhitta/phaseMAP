@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torch.utils.data import Dataset
+import numpy as np
 from libs_unet.training.model_delta import state_diff
 
 
@@ -67,3 +69,25 @@ class Custom_Wgt_MSE(nn.Module):
         el_wt_err = torch.mul(el_err, self.weights)
         loss_value = torch.mean(el_wt_err)
         return loss_value
+
+class El80Dataset(Dataset):
+    def __init__(self, x_data_path, y_data_path):
+        #define constant(s) for raw to model transforms
+        self.nist_mult = 1.17
+        # self.mmapped acts like a numpy array
+        self.x_data = np.load(x_data_path, mmap_mode='r+')
+        # loading the labels
+        self.y_data = np.load(y_data_path, mmap_mode='r+')
+
+    def __len__(self):
+        return self.x_data.shape[0]
+
+    def __getitem__(self, idx):
+        x_samp = self.nist_mult * torch.tensor(self.x_data[idx,None,:])
+        y_samp = self.nist_mult * torch.tensor(self.y_data[idx])
+        #log transform data, add small offset 1 so zero points remain ~zero on log scale
+        x_samp = torch.log(x_samp + 1)
+        y_samp = torch.log(y_samp + 1)
+        sample = (x_samp, y_samp)
+        return sample
+

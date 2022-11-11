@@ -1,6 +1,5 @@
 import numpy as np
 import pickle
-from matplotlib import pyplot as plt
 from scipy.special import voigt_profile as voigt
 from pathlib import Path
 
@@ -36,15 +35,7 @@ class spectrum_maker():
     height_type='random',
     height_mean=0,
     height_mag=0.001,
-    plot=False):
-        
-        if plot:
-        #    plot histogram of line intensities
-            plt.bar(x=line_loc, height=lines, width=3,color="red")
-            plt.xlabel('wavelength [nm]')
-            plt.ylabel('intensity')
-            plt.xlim([w_lo, w_hi])
-            plt.show
+    ):
         
         # jitter peak positions and intensities
         if shift:
@@ -69,14 +60,7 @@ class spectrum_maker():
         #sum the wave profiles across all the (intensity, loc) tuples, now smoothed spectra  on range w_lo:w_hi
         #scale the end result
         spec = np.sum(peaks, axis=0)
-        
-        if plot:
-            plt.plot(wave, spec)
-            plt.xlabel('wavelength [nm]')
-            plt.ylabel('intensity')
-            plt.xlim([w_lo, w_hi])
-            plt.show
-        
+
         return wave, spec    
     
     #make_spectra calculates the weighted combination of atomic lines and returns the composite spectrum
