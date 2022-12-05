@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, IterableDataset
 import numpy as np
 from libs_unet.training.model_delta import state_diff
+from libs_unet.training.spec_maker import spectrum_maker
 
 
 def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interval=10, debug=False, bsize=1):
@@ -29,6 +30,7 @@ def train_loop(dataloader, model, loss_fn, optimizer, writer, epoch, log_interva
         optimizer.step() #leverages tensor gradients from backward()
 
         if batch_n  % log_interval == 0: #write to tensorboard
+            print(f"loss: {loss}")
             loss, current = loss.item(), epoch * batch_n * bsize
             writer.add_scalar("Loss/train", loss, current)
             #detailed logging on nodes info for debug=True
@@ -91,3 +93,28 @@ class El80Dataset(Dataset):
         sample = (x_samp, y_samp)
         return sample
 
+# https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset
+class RandomSpectrumDataset(IterableDataset):
+    def __init__(self, min_el, max_el):
+        super(RandomSpectrumDataset).__init__()
+        self.maker = spectrum_maker()
+        #random generator
+        self.rng = np.random.default_rng()
+        self.el_range = range(min_el, max_el + 1) #allowable number of elements
+        self.ind_range = range(self.maker.max_z)
+
+        
+    def __next__(self):
+        fracs = np.zeros(self.maker.max_z)
+        num_el = self.rng.choice(self.el_range, 1) #determine number of elements
+        el_ind = self.rng.choice(self.ind_range, num_el) #randomly pick el indices
+        fracs[el_ind] = self.rng.random(num_el)
+        fracs /= np.sum(fracs) #fractions sum to 1
+        wave, spec, spec_array = self.maker.make_spectra(fracs)
+        x_data = torch.tensor(spec[None,:].astype('float32'))
+        y_data = torch.tensor(spec_array.astype('float32'))
+
+        return (x_data, y_data)
+
+    def __iter__(self):
+        return self
