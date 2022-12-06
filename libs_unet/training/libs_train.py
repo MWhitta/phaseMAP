@@ -95,13 +95,14 @@ class El80Dataset(Dataset):
 
 # https://pytorch.org/docs/stable/data.html#torch.utils.data.IterableDataset
 class RandomSpectrumDataset(IterableDataset):
-    def __init__(self, min_el, max_el):
+    def __init__(self, min_el, max_el, comp_only):
         super(RandomSpectrumDataset).__init__()
         self.maker = spectrum_maker()
         #random generator
         self.rng = np.random.default_rng()
         self.el_range = range(min_el, max_el + 1) #allowable number of elements
         self.ind_range = range(self.maker.max_z)
+        self.comp_only = comp_only
 
         
     def __next__(self):
@@ -110,11 +111,22 @@ class RandomSpectrumDataset(IterableDataset):
         el_ind = self.rng.choice(self.ind_range, num_el) #randomly pick el indices
         fracs[el_ind] = self.rng.random(num_el)
         fracs /= np.sum(fracs) #fractions sum to 1
-        wave, spec, spec_array = self.maker.make_spectra(fracs)
-        x_data = torch.tensor(spec[None,:].astype('float32'))
-        y_data = torch.tensor(spec_array.astype('float32'))
+        #need a dictionary of fractions for spec_maker
+        fracs_dict = dict(zip(self.maker.avail_elem, fracs))
+        wave, spec_dict, lines_dict = self.maker.make_spectra(fracs_dict, comp_only=self.comp_only)
+        y_data = np.zeros((self.maker.max_z + 2, len(wave)))
+        for el in spec_dict.keys():
+            if el == 'comp':
+                x_data = spec_dict['comp'] #keep at numpy array for storing
+            elif el == 'art':
+                y_data[self.maker.max_z] = spec_dict['art']
+            elif el == 'noi':
+                y_data[self.maker.max_z + 1] = spec_dict['noi']
+            else:
+                y_data[self.maker.el_index[el]] = spec_dict[el]
 
-        return (x_data, y_data)
+
+        return (wave, fracs, x_data, y_data)
 
     def __iter__(self):
         return self

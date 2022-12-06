@@ -12,6 +12,11 @@ with open(datapath / lines_file, 'rb') as f:
     wave = pickle.load(f)
     atom_lines = pickle.load(f)
 avail_elem = [key for key in atom_lines.keys()]
+el_index = {} #lookup from el symb to array index of element
+ind = 0
+for el in avail_elem:
+    el_index[el] = ind
+    ind += 1
 w_lo = np.min(wave)
 w_hi = np.max(wave)
 
@@ -21,6 +26,9 @@ class spectrum_maker():
 
     def __init__(self) -> None:
         super().__init__()
+        self.avail_elem = avail_elem
+        self.max_z = len(avail_elem)
+        self.el_index = el_index
 
 #peak_maker receives an array of line locations/intensities and creates peaks with optional perturbations
     def peak_maker(self,
@@ -72,7 +80,8 @@ class spectrum_maker():
         art_mag=0.1, # relative magnitude of artifact to spectrum intensity
         noise=False, # noise flag
         noise_type='Gaussian', # noise type
-        snr=10):
+        snr=10,
+        comp_only=False):
         
         frac_total = 0
         for k, v in fracs_dict.items():
@@ -96,7 +105,8 @@ class spectrum_maker():
         for el in lines_dict.keys():
             comp_lines += lines_dict[el] #composite lines array to make spectra
             #generate the weighted line spectrum for this element only
-            _, spec_dict[el] = self.peak_maker(wave, lines_dict[el])
+            if comp_only == False:
+                _, spec_dict[el] = self.peak_maker(wave, lines_dict[el])
         
         lines_dict['comp'] = comp_lines
         
