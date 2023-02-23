@@ -6,7 +6,7 @@ from pathlib import Path
 top_dir = Path(__file__).parent.parent.parent
 rel_path = 'data' 
 datapath = top_dir / 'data' / 'nist_libs'
-lines_file = "nist_elem_libs.pickle"
+lines_file = "nist_libs_hi_res.pickle"
 #create element list for this data file
 with open(datapath / lines_file, 'rb') as f:
     wave = pickle.load(f)
